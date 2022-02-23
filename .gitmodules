@@ -1,0 +1,6 @@
+[submodule "external/nlohmann"]
+	path = external/nlohmann
+	url = https://github.com/nlohmann/json.git
+[submodule "external/bmq"]
+	path = external/bmq
+	url = https://github.com/Beldex-Coin/bmq.git
