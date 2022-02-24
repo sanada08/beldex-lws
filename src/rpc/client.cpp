@@ -6,6 +6,8 @@
 #include <nlohmann/json.hpp>
 #include <chrono>
 #include <thread>
+#include "scanner.h"
+#include "error.h"
 
 int main()
 {
@@ -30,6 +32,10 @@ int main()
         connectPromise.set_value(false);
       });
 
+    // auto data{lws::error::daemon_timeout};
+    // bool success;
+
+
     lmq.request(connID, "rpc.get_height", [](bool success, auto data){
         if ( success == 1 && data[0] == "200"){
             std::cout<< "data[1]::::" << data[1]<< std::endl;
@@ -37,5 +43,17 @@ int main()
     });
 
     std::this_thread::sleep_for(std::chrono::seconds(5));
+
+    while(!success){
+      (!scanner::is_running())
+          return {lws::error::signal_abort_process};
+
+        if (sync_rpc_timeout <= (std::chrono::steady_clock::now() - start))
+          return {lws::error::daemon_timeout};
+
+        if (!resp.matches(std::errc::timed_out))
+          return resp.error();
+      }
+    }
     
 }
