@@ -14,5 +14,5 @@
 
 namespace lws
 {
-    std::atomic<bool> scanner::running{true}
+    std::atomic<bool> scanner::running{true};
 }

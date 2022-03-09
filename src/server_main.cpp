@@ -25,128 +25,96 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <boost/filesystem/operations.hpp>
-#include <boost/optional/optional.hpp>
-#include <boost/program_options/options_description.hpp>
-#include <boost/program_options/parsers.hpp>
-#include <boost/program_options/variables_map.hpp>
-#include <boost/thread/thread.hpp>
-#include <chrono>
 #include <iostream>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
-#include "option.h"
+#include "command_line_arg.h"
+#include "utils.hpp"
+
+#include <csignal>
+#include <cstdlib>
+#include <filesystem>
+#include <iostream>
+#include <vector>
+
+extern "C"
+{
+#include <sys/types.h>
+#include <pwd.h>
+
+#ifdef ENABLE_SYSTEMD
+#include <systemd/sd-daemon.h>
+#endif
+}
+
+namespace fs = std::filesystem;
 
 namespace
 {
-  struct options : lws::options
+  void run(lws::command_line_options options)
   {
-    const command_line::arg_descriptor<std::string> daemon_rpc;
-    
-    options()
-      : lws::options()
-      , daemon_rpc{"daemon", "<protocol>://<address>:<port> of a beldexd ZMQ RPC", ""}
-    {}
+    std::filesystem::path data_dir;
 
-    void prepare(boost::program_options::options_description& description) const
+    if (options.data_dir.empty())
     {
-      static constexpr const char rest_default[] = "https://0.0.0.0:8443";
-
-      lws::options::prepare(description);
-      command_line::add_arg(description, daemon_rpc);
+      if (auto home_dir = util::get_home_dir())
+      {
+        data_dir = options.testnet
+                       ? *home_dir / ".beldex" / "testnet" / "lws"
+                       : *home_dir / ".beldex" / "lws";
+        std::cout << "data_dir::" << data_dir << std::endl;
+      }
+      else
+      {
+        std::cerr << "Could not determine your home directory; please use --data-dir to specify a data directory\n";
+      }
     }
-  };
-
-  struct program
-  {
-    std::string daemon_rpc;
-  };
-
-  void print_help(std::ostream& out)
-  {
-    boost::program_options::options_description description{"Options"};
-    options{}.prepare(description);
-
-    out << "Usage: [options]" << std::endl;
-    out << description;
-  }
-
-  boost::optional<program> get_program(int argc, char** argv)
-  {
-    namespace po = boost::program_options;
-
-    const options opts{};
-    po::variables_map args{};
+    else
     {
-      po::options_description description{"Options"};
-      opts.prepare(description);
-
-      po::store(
-        po::command_line_parser(argc, argv).options(description).run(), args
-      );
-      po::notify(args);
+      data_dir = std::filesystem::u8path(options.data_dir);
     }
 
-    if (command_line::get_arg(args, command_line::arg_help))
+    if (!fs::exists(data_dir))
+      fs::create_directories(data_dir);
+
+    if (options.testnet)
     {
-      print_help(std::cout);
-      return boost::none;
+      "Starting in testnet mode, make sure this is intentional!");
     }
 
-    opts.set_network(args); // do this first, sets global variable :/
-    mlog_set_log_level(command_line::get_arg(args, opts.log_level));
+    auto bmq_server_ptr = std::make_unique<BeldexmqServer
 
-    program prog{
-      command_line::get_arg(args, opts.daemon_rpc)
-    };
-
-    return prog;
+    // auto ctx = lws::rpc::context::make(std::move(options.daemon_rpc));
   }
+}
 
-  void run(program prog)
-  {
-    std::signal(SIGINT, [] (int) { lws::scanner::stop(); });
-
-    boost::filesystem::create_directories(prog.db_path);
-    auto ctx = lws::rpc::context::make(std::move(prog.daemon_rpc));
-
-    MINFO("Using beldexd BMQ RPC at " << ctx.daemon_address());
-  }
-} // anonymous
-
-int main(int argc, char** argv)
+std::atomic<int> signalled = 0;
+extern "C" void handle_signal(int sig)
 {
-  tools::on_startup(); // if it throws, don't use MERROR just print default msg
+  signalled = sig;
+}
+
+int main(int argc, char **argv)
+{
+  std::signal(SIGINT, handle_signal);
+  std::signal(SIGTERM, handle_signal);
+
+  lws::command_line_parser parser;
 
   try
   {
-    boost::optional<program> prog;
-
-    try
-    {
-      prog = get_program(argc, argv);
-    }
-    catch (std::exception const& e)
-    {
-      std::cerr << e.what() << std::endl << std::endl;
-      print_help(std::cerr);
-      return EXIT_FAILURE;
-    }
-
-    if (prog)
-      run(std::move(*prog));
+    parser.parse_args(argc, argv);
   }
-  catch (std::exception const& e)
+  catch (const std::exception &e)
   {
-    MERROR(e.what());
+    std::cerr << e.what() << std::endl;
+    parser.print_usage();
     return EXIT_FAILURE;
   }
-  catch (...)
-  {
-    MERROR("Unknown exception");
-    return EXIT_FAILURE;
-  }
-  return EXIT_SUCCESS;
+
+  auto options = parser.get_options();
+
+  run(std::move(options));
 }

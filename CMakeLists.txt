@@ -1,25 +1,47 @@
+
 cmake_minimum_required(VERSION 3.1.0)
 project(beldex-lws)
-
 
 enable_language(CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(BELDEX_LIBRARIES
+cncrypto
+  lmdb_lib
+  net
+  cryptonote_core
+  cryptonote_basic
+  # cryptonote_format_utils_basic
+  ringct
+  ringct_basic
+  multisig
+  checkpoints
+  blockchain_db
   common
+  lmdb
+  device
+  randomx
   epee
-  easylogging
-  oxenmq
 )
-
 
 set(BELDEX_SEARCH_PATHS
+  "/src/crypto"  
   "/contrib/epee/src"
+  "/external/db_drivers/liblmdb"
   "/external/easylogging++"
   "/src"
+  "/src/crypto/wallet"
+  "/src/cryptonote_basic"
+  "/src/lmdb"
+  "/src/ringct"
+  "/src/rpc"
 )
 
+set(MONERO_OPTIONAL unbound wallet-crypto)
+
+
+# Needed due to "bug" in beldex CMake - the `project` function is used twice!
 if (NOT BELDEX_SOURCE_DIR)
   message(FATAL_ERROR "The argument -DBELDEX_SOURCE_DIR must specify a location of a beldex source tree")
 endif()
@@ -31,7 +53,16 @@ endif()
 load_cache(${BELDEX_BUILD_DIR} READ_WITH_PREFIX beldex_
   Boost_THREAD_LIBRARY_RELEASE
   CMAKE_CXX_COMPILER
-  beldex_SOURCE_DIR    
+  EXTRA_LIBRARIES
+  HIDAPI_LIBRARY
+  LMDB_INCLUDE
+  UNBOUND_LIBRARIES
+  beldex_SOURCE_DIR
+  OPENSSL_CRYPTO_LIBRARY
+  OPENSSL_SSL_LIBRARY
+  SODIUM_LIBRARY
+  ZMQ_INCLUDE_PATH
+  ZMQ_LIB
 )
 
 if (NOT (beldex_beldex_SOURCE_DIR MATCHES "${BELDEX_SOURCE_DIR}(/src/cryptonote_protocol)"))
@@ -40,6 +71,14 @@ endif()
 
 if (NOT (CMAKE_CXX_COMPILER STREQUAL beldex_CMAKE_CXX_COMPILER))
   message(FATAL_ERROR "Compiler for beldex build differs from this project")
+endif()
+
+if ("${beldex_UNBOUND_LIBRARIES}" STREQUAL "UNBOUND_LIBRARIES-NOTFOUND")
+  unset(beldex_UNBOUND_LIBRARIES)
+endif()
+
+if ("${beldex_HIDAPI_LIBRARY}" STREQUAL "HIDAPI_LIBRARY-NOTFOUND")
+  unset(beldex_HIDAPI_LIBRARY)
 endif()
 
 #
@@ -59,10 +98,14 @@ if (NOT (Boost_THREAD_LIBRARY STREQUAL beldex_Boost_THREAD_LIBRARY_RELEASE))
 endif()
 
 foreach (LIB ${BELDEX_LIBRARIES})
-  find_library(LIB_PATH NAMES "${LIB}" PATHS ${BELDEX_BUILD_DIR} PATH_SUFFIXES "/src/${LIB}" "external/${LIB}" ${MONERO_SEARCH_PATHS} NO_DEFAULT_PATH)
+  find_library(LIB_PATH NAMES "${LIB}" PATHS ${BELDEX_BUILD_DIR} PATH_SUFFIXES "/src/${LIB}" "external/${LIB}" ${BELDEX_SEARCH_PATHS} NO_DEFAULT_PATH)
 
-  list(FIND BELDEX_OPTIONAL "${LIB}" LIB_OPTIONAL)
+  list(FIND MONERO_OPTIONAL "${LIB}" LIB_OPTIONAL)
   if (NOT LIB_PATH)
+    if (LIB_OPTIONAL EQUAL -1)
+      message(FATAL_ERROR "Unable to find required Monero library ${LIB}")
+    endif()
+  else ()
     set(LIB_NAME "beldex::${LIB}")
     add_library(${LIB_NAME} STATIC IMPORTED)
     set_target_properties(${LIB_NAME} PROPERTIES IMPORTED_LOCATION ${LIB_PATH})
@@ -81,8 +124,6 @@ set_property(TARGET beldex::libraries PROPERTY
     "${BELDEX_SOURCE_DIR}/external/loki-mq"
     "${BELDEX_SOURCE_DIR}/src"
 )
-
-
 set_property(TARGET beldex::libraries PROPERTY
   INTERFACE_LINK_LIBRARIES
     ${IMPORTED_BELDEX_LIBRARIES}
@@ -92,8 +133,19 @@ set_property(TARGET beldex::libraries PROPERTY
     ${Boost_SERIALIZATION_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_THREAD_LIBRARY}
+    ${beldex_HIDAPI_LIBRARY}
+    ${beldex_OPENSSL_CRYPTO_LIBRARY}
+    ${beldex_OPENSSL_SSL_LIBRARY}
+    ${beldex_SODIUM_LIBRARY}
+    ${beldex_UNBOUND_LIBRARIES}
     ${CMAKE_DL_LIBS}
 )
 
+set(LMDB_INCLUDE "${beldex_LMDB_INCLUDE}")
+set(LMDB_LIB_PATH "beldex::lmdb")
+set(ZMQ_LIB "${beldex_ZMQ_LIB}")
+set(ZMQ_INCLUDE_PATH "${beldex_ZMQ_INCLUDE_PATH}")
+
 add_subdirectory(external)
+add_subdirectory(utils)
 add_subdirectory(src)
