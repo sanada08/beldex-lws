@@ -81,12 +81,34 @@ namespace
 
     if (options.testnet)
     {
-      "Starting in testnet mode, make sure this is intentional!");
+      std::cout<<"Starting in testnet mode, make sure this is intentional!"<<std::endl;
     }
 
-    auto bmq_server_ptr = std::make_unique<BeldexmqServer
 
-    // auto ctx = lws::rpc::context::make(std::move(options.daemon_rpc));
+    #ifndef INTEGRATION_TEST
+        const auto [private_key, private_key_ed25519, private_key_x25519] =
+            get_mn_privkeys(options.beldexd_omq_rpc, [] { return signalled == 0; });
+#else
+        // Normally we request the key from daemon, but in integrations/swarm
+        // testing we are not able to do that, so we extract the key as a
+        // command line option:
+        legacy_seckey private_key{};
+        ed25519_seckey private_key_ed25519{};
+        x25519_seckey private_key_x25519{};
+        try {
+            private_key = legacy_seckey::from_hex(options.beldexd_key);
+            private_key_ed25519 = ed25519_seckey::from_hex(options.beldexd_ed25519_key);
+            private_key_x25519 = x25519_seckey::from_hex(options.beldexd_x25519_key);
+        } catch (...) {
+            
+            std::cout<< "--beldexd-key, --beldexd-x25519-key, and --beldexd-ed25519-key are required"<< std::endl;
+            throw;
+        }
+#endif
+        if (signalled) {
+            return EXIT_FAILURE;
+        }
+
   }
 }
 

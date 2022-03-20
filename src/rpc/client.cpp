@@ -7,10 +7,33 @@
 #include <chrono>
 #include <thread>
 
-
 namespace lws
 {
-  void 
+  void BeldexmqServer::connect_beldexd(const bmq::address &beldex_rpc)
+  {
+    auto start = std::chrono::steady_clock::now();
+    while (true) {
+        std::promise<bool> prom;
+        BELDEX_LOG(info, "Establishing connection to beldexd...");
+        omq_.connect_remote(beldexd_rpc,
+            [this, &prom](auto cid) { beldexd_conn_ = cid; prom.set_value(true); },
+            [&prom, &beldexd_rpc](auto&&, std::string_view reason) {
+                BELDEX_LOG(warn, "failed to connect to local beldexd @ {}: {}; retrying", beldexd_rpc, reason);
+                prom.set_value(false);
+            },
+            // Turn this off since we are using oxenmq's own key and don't want to replace some existing
+            // connection to it that might also be using that pubkey:
+            oxenmq::connect_option::ephemeral_routing_id{},
+            oxenmq::AuthLevel::admin);
+
+        if (prom.get_future().get()) {
+            BELDEX_LOG(info, "Connected to beldexd in {}",
+                    util::short_duration(std::chrono::steady_clock::now() - start));
+            break;
+        }
+        std::this_thread::sleep_for(500ms);
+    }
+  }
 }
 
 /******************************************************************************************************

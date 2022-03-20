@@ -20,11 +20,11 @@ namespace lws
 
         // Connects (and blocks until connected) to beldexd.  When this returns an beldexd connection will
         // be available (and beldexd_conn_ will be set to the connection id to reach it).
-        void connect_beldexd(const oxenmq::address& beldexd_rpc);
+        void connect_beldexd(const bmq::address& beldexd_rpc);
 
         public:
             // Initialize oxenmq; return a future that completes once we have connected to and initialized
             // from beldexd.
-            void init( oxenmq::address beldexd_rpc);    
+            void init( bmq::address beldexd_rpc);    
     }
 }
