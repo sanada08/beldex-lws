@@ -4,3 +4,15 @@
 [submodule "external/bmq"]
 	path = external/bmq
 	url = https://github.com/Beldex-Coin/bmq.git
+[submodule "unit_test/Catch2"]
+	path = unit_test/Catch2
+	url = https://github.com/catchorg/Catch2
+[submodule "external/cpr"]
+	path = external/cpr
+	url = https://github.com/whoshuu/cpr.git
+[submodule "external/uWebSockets"]
+	path = external/uWebSockets
+	url = https://github.com/uNetworking/uWebSockets.git
+[submodule "external/spdlog"]
+	path = external/spdlog
+	url = https://github.com/gabime/spdlog.git
